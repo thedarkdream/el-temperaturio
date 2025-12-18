@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { LineChartData, LineChartProps } from "../dto/LineChartProps";
-import { Chart, Colors, registerables } from 'chart.js';
 import { ApiTemperatureObj } from "../apimodel/ApiModel";
 import TemperatureGraph from "../components/TemperatureGraph";
-import { ArtistTimelineDto } from "../dto/ListenTimelineDtos";
 import DateTimePicker from 'react-datetime-picker'
 import { TemperatureDto } from "../dto/TemperatureDto";
 
@@ -33,10 +31,42 @@ function ListenTimelinePage() {
   const [endDate, setEndDate] = useState(makeEndOfDay(new Date()));
 
   const [loading, setLoading] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const [mobileDetected, setMobileDetected] = useState(false);
 
   const url = 'https://z3h6bk2zdbissr7lsil7ewkepy0uhudg.lambda-url.eu-central-1.on.aws/';
 
   const [graphProps, setGraphProps] = useState<LineChartData>();
+  const [temperatureData, setTemperatureData] = useState<TemperatureDto[]>([]);
+
+  // Detect if device is mobile/touch-enabled
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile('ontouchstart' in window || navigator.maxTouchPoints > 0);
+      setMobileDetected(true);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  // Handle orientation changes - re-compute options only
+  useEffect(() => {
+    const handleOrientationChange = () => {
+      if (temperatureData.length > 0) {
+        // Re-compute options without re-computing data
+        refreshGraph(temperatureData);
+      }
+    };
+
+    window.addEventListener('orientationchange', handleOrientationChange);
+    window.addEventListener('resize', handleOrientationChange);
+    
+    return () => {
+      window.removeEventListener('orientationchange', handleOrientationChange);
+      window.removeEventListener('resize', handleOrientationChange);
+    };
+  }, [temperatureData, isMobile]);
 
   function fetchGraph(): void {
     setLoading(true);
@@ -50,7 +80,8 @@ function ListenTimelinePage() {
             }});
 
             setLoading(false);
-            setGraphProps(mapGraph(mappedData));
+            setTemperatureData(mappedData);
+            refreshGraph(mappedData);
         })
         .catch((err) => {
         console.log(err.message);
@@ -63,15 +94,17 @@ function ListenTimelinePage() {
     return new Date(Date.UTC(parseInt(b[0]), parseInt(b[1]) - 1, parseInt(b[2]), parseInt(b[3]), parseInt(b[4]), parseInt(b[5]), parseInt(b[6])));
   }
 
-  // Auto-load graph on component mount
+  // Auto-load graph after mobile detection is complete
   useEffect(() => {
-    fetchGraph();
-  }, []);
+    if (mobileDetected) {
+      fetchGraph();
+    }
+  }, [mobileDetected]);
 
     return (
       <div className="container-fluid">
         <div className="row">
-          <div className="col-12 col-md-3 menuPadding">
+          <div className="col-12 col-sm-4 col-md-3 menuPadding">
               <div className="form-group">
                 <label className="form-label">Date from</label>
                 <div>
@@ -84,143 +117,141 @@ function ListenTimelinePage() {
                   <DateTimePicker className="form-control" onChange={(date) => date && setEndDate(date)} value={endDate} />
                 </div>
               </div>
-
               <button className="btn btn-primary mb-2 w-100" onClick={(e) => fetchGraph()}>Fetch graph!</button>
 
           </div>
 
-          <div className="col-12 col-md-9">
+          <div className="col-12 col-sm-8 col-md-9">
             <TemperatureGraph data={graphProps} loading={loading} />
           </div>
         </div>
       </div>
     );
   
-  function mapGraph(data: TemperatureDto[]): LineChartData {
+  function computeChartOptions(): any {
+    let color = "#cc2828ff";
+    const isLandscape = window.innerWidth > window.innerHeight;
+    const isMobileLandscape = isMobile && isLandscape;
     
-    let color = "#3b82f6"; // Modern blue color
-
     return {
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        interaction: {
-          mode: 'index',
-          intersect: false,
+      chart: {
+        toolbar: {
+          show: !isMobileLandscape
         },
-        plugins: {
-          legend: {
-            display: true,
-            position: 'top',
-            labels: {
-              font: {
-                size: 14,
-                weight: 500
-              },
-              color: '#374151',
-              padding: 15
-            }
-          },
-          title: {
-            display: true,
-            text: 'Temperature Over Time',
-            font: {
-              size: 18,
-              weight: 'bold'
-            },
-            color: '#1f2937',
-            padding: {
-              top: 10,
-              bottom: 20
-            }
-          },
-          tooltip: {
-            backgroundColor: 'rgba(0, 0, 0, 0.8)',
-            padding: 12,
-            titleFont: {
-              size: 14,
-              weight: 'bold'
-            },
-            bodyFont: {
-              size: 13
-            },
-            callbacks: {
-              label: function(context: any) {
-                return `Temperature: ${context.parsed.y.toFixed(1)}°C`;
-              }
-            }
-          }
+        zoom: {
+          type: 'x',
+          enabled: !isMobile,
+          autoScaleYaxis: true
         },
-        scales: {
-          x: {
-            type: 'time',
-            grid: {
-              color: 'rgba(0, 0, 0, 0.05)'
-            },
-            ticks: {
-              color: '#6b7280',
-              font: {
-                size: 12
-              }
-            }
-          },
-          y: {
-            min: 17,
-            max: 27,
-            grid: {
-              color: 'rgba(0, 0, 0, 0.05)'
-            },
-            ticks: {
-              color: '#6b7280',
-              font: {
-                size: 12
-              },
-              callback: function(value: any) {
-                return value + '°C';
-              }
-            }
-          }
+        animations: {
+          enabled: false
         },
-        animation: {
-          duration: 1000,
-          easing: 'easeInOutQuart'
+        offsetY: isMobileLandscape ? -10 : 0,
+        sparkline: {
+          enabled: false
         }
       },
-      data: {
-        labels: mapLabels(data),
-        datasets: new Array({
-          label: "Temperature",
-          data: data.map(p => { return { x: p.date_time, y: p.temperature }} ),
-          borderWidth: 3,
-          tension: 0.4,
-          backgroundColor: 'rgba(59, 130, 246, 0.15)',
-          borderColor: color,
-          fill: true,
-          pointBackgroundColor: '#ffffff',
-          pointBorderColor: color,
-          pointBorderWidth: 2,
-          pointRadius: 4,
-          pointHoverRadius: 7,
-          pointHoverBackgroundColor: '#ffffff',
-          pointHoverBorderColor: color,
-          pointHoverBorderWidth: 3,
-          })
-      }
+      colors: [color],
+      fill: {
+        type: 'gradient',
+        gradient: {
+          shadeIntensity: 1,
+          opacityFrom: 0.7,
+          opacityTo: 0.1,
+          stops: [0, 100]
+        }
+      },
+      dataLabels: {
+        enabled: false
+      },
+      title: {
+        text: isMobileLandscape ? '' : 'Temperature Over Time',
+        align: 'center',
+        style: {
+          fontSize: '18px',
+          fontWeight: 'bold',
+          color: '#1f2937'
+        }
+      },
+      xaxis: {
+        type: 'datetime',
+        labels: {
+          style: {
+            colors: '#6b7280',
+            fontSize: '12px'
+          }
+        }
+      },
+      yaxis: {
+        labels: {
+          style: {
+            colors: '#6b7280',
+            fontSize: '12px'
+          },
+          formatter: function(value: number) {
+            return value.toFixed(1) + '°C';
+          }
+        }
+      },
+      tooltip: {
+        x: {
+          format: 'dd MMM yyyy HH:mm'
+        },
+        y: {
+          formatter: function(value: number) {
+            return value.toFixed(1) + '°C';
+          }
+        }
+      },
+      markers: {
+        size: 0,
+      },
+      legend: {
+        show: true,
+        position: 'top',
+        fontSize: isMobileLandscape ? '12px' : '14px',
+        fontWeight: 500,
+        labels: {
+          colors: '#374151'
+        },
+        offsetY: isMobileLandscape ? -5 : 0,
+        height: isMobileLandscape ? 20 : undefined
+      },
+      grid: {
+        borderColor: 'rgba(0, 0, 0, 0.05)',
+        xaxis: {
+          lines: {
+            show: true
+          }
+        },
+        padding: {
+          top: isMobileLandscape ? -10 : 0,
+          bottom: isMobileLandscape ? 0 : 10
+        }
+      },
     }
   }
 
-  function mapLabels(data: TemperatureDto[]): Date[] | undefined {
-    return data.map(p => p.date_time);
+  function computeChartData(data: TemperatureDto[]): any[] {
+    return [{
+      name: 'Temperature',
+      data: data.map(p => ({ 
+        x: p.date_time.getTime(), 
+        y: p.temperature 
+      }))
+    }];
   }
 
-  // function mapDataset(data: TemperatureDto[]): import("chart.js").ChartDataset<"line", (number | import("chart.js").Point | null)[]>[] {
-    
-  //   return ;
-    
-  // }
+  function refreshGraph(data: TemperatureDto[]): void {
+    const chartData: LineChartData = {
+      options: computeChartOptions(),
+      series: computeChartData(data)
+    };
+    setGraphProps(chartData);
+  }
+  }
 
-  
-}
+
 
 
 export default ListenTimelinePage;

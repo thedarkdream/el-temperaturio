@@ -1,4 +1,4 @@
-import type { ChartData, ChartOptions } from 'chart.js';
+import { ApexOptions } from 'apexcharts';
 
 export interface LineChartProps {
     data: LineChartData | undefined
@@ -6,6 +6,6 @@ export interface LineChartProps {
 }
 
 export interface LineChartData {
-    options: ChartOptions<'line'>;
-    data: any;
+    options: ApexOptions;
+    series: any[];
 }
