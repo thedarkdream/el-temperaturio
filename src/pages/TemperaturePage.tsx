@@ -38,6 +38,7 @@ function ListenTimelinePage() {
 
   const [graphProps, setGraphProps] = useState<LineChartData>();
   const [temperatureData, setTemperatureData] = useState<TemperatureDto[]>([]);
+  const [chartSeries, setChartSeries] = useState<any[]>([]);
 
   // Detect if device is mobile/touch-enabled
   useEffect(() => {
@@ -53,9 +54,9 @@ function ListenTimelinePage() {
   // Handle orientation changes - re-compute options only
   useEffect(() => {
     const handleOrientationChange = () => {
-      if (temperatureData.length > 0) {
-        // Re-compute options without re-computing data
-        refreshGraph(temperatureData);
+      if (chartSeries.length > 0) {
+        // Re-compute options only, use existing series data
+        refreshGraphOptions();
       }
     };
 
@@ -66,7 +67,7 @@ function ListenTimelinePage() {
       window.removeEventListener('orientationchange', handleOrientationChange);
       window.removeEventListener('resize', handleOrientationChange);
     };
-  }, [temperatureData, isMobile]);
+  }, [chartSeries, isMobile]);
 
   function fetchGraph(): void {
     setLoading(true);
@@ -243,9 +244,19 @@ function ListenTimelinePage() {
   }
 
   function refreshGraph(data: TemperatureDto[]): void {
+    const series = computeChartData(data);
+    setChartSeries(series);
     const chartData: LineChartData = {
       options: computeChartOptions(),
-      series: computeChartData(data)
+      series: series
+    };
+    setGraphProps(chartData);
+  }
+
+  function refreshGraphOptions(): void {
+    const chartData: LineChartData = {
+      options: computeChartOptions(),
+      series: chartSeries
     };
     setGraphProps(chartData);
   }
