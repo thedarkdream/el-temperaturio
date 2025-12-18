@@ -40,7 +40,7 @@ function TemperatureGraph( props: LineChartProps ) {
             }
         };
 
-        // Calculate on mount and when data changes
+        // Calculate on mount
         calculateHeight();
         
         // Recalculate on window resize
@@ -53,7 +53,7 @@ function TemperatureGraph( props: LineChartProps ) {
             window.removeEventListener('resize', calculateHeight);
             clearTimeout(timeoutId);
         };
-    }, [props.data]);
+    }, []);
 
     return <div className="temperatureGraph" ref={containerRef}>
         {props.loading && <img src={Spinner} alt="Loading..." width="100px"/>}
